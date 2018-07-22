@@ -10,6 +10,12 @@ echo "      |___/                             "
 echo "       Directadmin Hardener - v1.0      "
 echo "       https://github.com/CyberGx/      "
 
+FORE_RED_COLOR='\033[1;31m'
+DEF_COLOR='\033[0m' # No Color
+BACK_GREEN_COLOR='\033[42m'
+FORE_WHITE_COLOR='\033[0;37m'
+FORE_GREEN_COLOR='\033[1;32m'
+
 # Functions
     config_editor(){
         sed -i 's/\(^'"$1"'=\).*/\1'"$2"'/' $3
@@ -28,14 +34,28 @@ echo "       https://github.com/CyberGx/      "
         sed -n "s/^$1\s*=\s*\(\S*\).*$/\1/p" $2
     }
 
+    get_config_variable_space_based (){
+        sed -n "s/^$1\s* \(\S*\).*$/\1/p" $2
+    }
+
     # $1:Variable, $2:Recomanded String, $3:Advisor
     recommander(){
         if [[ $1 == $2 ]]
         then
             echo $1
         else
-            echo "$1 ( Not recomanded )"
-            [ ! -z "$3" ] && echo "- " $3
+            echo -e "${FORE_RED_COLOR}$1${DEF_COLOR}"
+            [ ! -z "$3" ] && echo -e " ${FORE_RED_COLOR}- " $3 "${DEF_COLOR}"
+        fi
+    }
+
+    recommanderReverse(){
+        if [[ $1 != $2 ]]
+        then
+            echo $1
+        else
+            echo -e "${FORE_RED_COLOR}$1${DEF_COLOR}"
+            [ ! -z "$3" ] && echo -e " ${FORE_RED_COLOR}- " $3 "${DEF_COLOR}"
         fi
     }
 
@@ -44,8 +64,8 @@ echo "       https://github.com/CyberGx/      "
         then
             echo "Yes"
         else
-            echo "No ( Not recomanded )"
-            [ ! -z "$3" ] && echo "- " $3
+            echo -e "${FORE_RED_COLOR}No${DEF_COLOR}"
+            [ ! -z "$3" ] && echo -e " ${FORE_RED_COLOR}- " $3 "${DEF_COLOR}"
         fi
     }
 
@@ -55,19 +75,61 @@ echo "       https://github.com/CyberGx/      "
         then
             echo "Yes"
         else
-            echo "No ( Not recomanded )"
-            [ ! -z "$3" ] && echo "- " $3
+            echo -e "${FORE_RED_COLOR}No${DEF_COLOR}"
+            [ ! -z "$3" ] && echo -e " ${FORE_RED_COLOR}- " $3 "${DEF_COLOR}"
         fi
     }
 
+    serviceStatusCheck(){
+        service_total_process=$(ps -ef | grep -v grep | grep $1 |  wc -l)
+        if [ "$service_total_process" -gt "0" ]
+        then
+            echo -e "${FORE_GREEN_COLOR}⦿ Up${DEF_COLOR}"
+        else
+            echo -e "${FORE_RED_COLOR}⦾ Down${DEF_COLOR}"
+        fi
+    }
+
+    emptyMask(){
+        if [ ! -z "$1" ]
+        then
+            echo $1
+        else
+            echo $2
+        fi
+    }
 # Show Status
 echo -e " \n\n ----- Server Status ----- \n"
     
-    echo "  # OS : " $(cat /etc/redhat-release)
+    echo "# OS : " $(cat /etc/redhat-release)
 
 echo -e " \n\n ----- Services Status -----"
+
+    # SSH Status
+    echo -e "\n# SSH ($(serviceStatusCheck "sshd"))"
+    
+    ssh_config_path=/etc/ssh/sshd_config
+    ssh_port=$(get_config_variable_space_based "Port" $ssh_config_path)
+    ssh_permit_root_login=$(get_config_variable_space_based "PermitRootLogin" $ssh_config_path)
+    ssh_protocol=$(get_config_variable_space_based "Protocol" $ssh_config_path)
+    ssh_password_authentication=$(get_config_variable_space_based "PasswordAuthentication" $ssh_config_path)
+    ssh_banner=$(get_config_variable_space_based "Banner" $ssh_config_path)
+    ssh_banner=$(get_config_variable_space_based "Banner" $ssh_config_path)
+    ssh_client_alive_interval=$(get_config_variable_space_based "ClientAliveInterval" $ssh_config_path)
+    ssh_client_count_max=$(get_config_variable_space_based "ClientAliveCountMax" $ssh_config_path)
+    
+    echo "  * SSH config path :" $ssh_config_path
+    echo "  - Protocol :" $(recommander $(emptyMask $ssh_protocol "2,1") "2" "Set protocol to just 2.") 
+    echo "  - Port :" $(recommanderReverse $(emptyMask $ssh_port "22") "22" "Change default ssh port.")
+    echo "  - PermitRootLogin :" $(recommander $(emptyMask $ssh_permit_root_login "yes") "no" "Disable login with username root.")
+    echo "  - PasswordAuthentication :" $(recommander $(emptyMask $ssh_password_authentication "yes") "no" "Disable PasswordAuthentication and force to login with key.")
+    echo "  - Banner :" $(recommanderReverse $(emptyMask $ssh_banner "N/A") "N/A" "Set banner to prevent attacker.")
+    echo "  - ClientAliveInterval :" $(recommanderReverse $(emptyMask $ssh_client_alive_interval "N/A") "N/A" "Set it to 300 for disconnect after 5min.")
+    echo "  - ClientAliveCountMax :" $(recommander $(emptyMask $ssh_client_count_max "N/A") "0" "Recomanded value is 0.")
+
+    
     # Directadmin Status
-    echo -e "\n# Directadmin"
+    echo -e "\n# Directadmin ($(serviceStatusCheck "directadmin"))"
 
     directadmin_options_path=/usr/local/directadmin/custombuild/options.conf
     directadmin_system_email=$(get_config_variable "email" $directadmin_options_path)
@@ -88,7 +150,7 @@ echo -e " \n\n ----- Services Status -----"
 
 
     # Mysql Status
-    echo -e "\n# MYSQL"
+    echo -e "\n# MYSQL ($(serviceStatusCheck "mysqld"))"
     mysql_config_path=/etc/my.cnf
     mysql_bind_address=$(get_config_variable "bind-address" $mysql_config_path)
 
@@ -105,6 +167,9 @@ echo -e " \n\n ----- Services Status -----"
     php_allow_url_include=$(get_config_variable "allow_url_include" $php_ini_path)
     php_allow_url_fopen=$(get_config_variable "allow_url_fopen" $php_ini_path)
     php_post_max_size=$(get_config_variable "post_max_size" $php_ini_path)
+    php_max_execution_time=$(get_config_variable "max_execution_time" $php_ini_path)
+    php_max_input_time=$(get_config_variable "max_input_time" $php_ini_path)
+    php_memory_limit=$(get_config_variable "memory_limit" $php_ini_path)
     echo "  * PHP.ini path :" $php_ini_path
     echo "  - PHP Version :" $(php -v | sed 's/(.*//' | head -1)
     echo "  - is Expose PHP OFF :" $(recommanderYesOrNo $php_expose "Off" "To restrict PHP information leakage set expose_php=Off")
@@ -112,5 +177,8 @@ echo -e " \n\n ----- Services Status -----"
     echo "  - is Logging Enable :" $(recommanderYesOrNo $php_log_errors "On" "To enable logging system set log_errors=Off")
     echo "  - is allow_url_include Disable :" $(recommanderYesOrNo $php_allow_url_include "Off" "To prevent Remote Code Execution set allow_url_include=Off")
     echo "  - is allow_url_fopen Disable :" $(recommanderYesOrNo $php_allow_url_fopen "Off" "To prevent Remote Code Execution set allow_url_fopen=Off")
-    echo "  - is php_post_max_size lower than 64M :" $(recommanderLower $php_post_max_size "64" "To prevent attacker to send oversized POST requests to eat your system resources, set php_post_max_size<64M")
+    echo "  - is post_max_size lower than 64M :" $(recommanderLower $php_post_max_size "64" "To prevent attacker to send oversized POST requests to eat your system resources, set post_max_size<64M")
+    echo "  - is max_execution_time lower than 30 :" $(recommanderLower $php_max_execution_time "30" "To prevent attacker to DOS and eat your system resources, set php_max_execution_time<30")
+    echo "  - is max_input_time lower than 60 :" $(recommanderLower $php_max_input_time "60" "To prevent attacker to DOS and eat your system resources, set max_input_time<60")
+    echo "  - is memory_limit lower than 64M :" $(recommanderLower $php_memory_limit "128" "To prevent attacker to send oversized POST requests to eat your system resources, set php_memory_limit<128M")
     echo "  - Disable Functions :" $php_disable_functions
